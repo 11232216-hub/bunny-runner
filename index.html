@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>垂耳兔大冒險</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#dff4ff;font-family:system-ui,-apple-system,"Noto Sans TC",sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;color:#4b3b35}
+.game-wrap{width:min(960px,96vw)}
+h1{text-align:center;margin:0 0 8px;font-size:28px}
+.info{display:flex;justify-content:space-between;margin:0 4px 8px;font-weight:700}
+#game{width:100%;display:block;background:#fff;border:4px solid #5b514c;border-radius:18px;box-shadow:0 8px 24px #0002;touch-action:manipulation}
+.tip{text-align:center;margin-top:8px;color:#675b55;font-size:14px}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+<h1>🐰 垂耳兔大冒險</h1>
+<div class="info"><span>分數：<b id="score">0</b></span><span>最高分：<b id="best">0</b></span></div>
+<canvas id="game" width="960" height="420"></canvas>
+<div class="tip">按 Space／↑／點擊畫面跳躍　｜　撞到障礙物後按 R 重新開始</div>
+</div>
+<script>
+const c=document.getElementById("game"),ctx=c.getContext("2d");
+const W=c.width,H=c.height,ground=350;
+let rabbit,obstacles,clouds,score,best=Number(localStorage.getItem("bunnyBest")||0);
+let speed=6,gameOver=false,started=false,last=0,spawn=0;
+
+document.getElementById("best").textContent=best;
+
+function reset(){
+ rabbit={x:110,y:ground-72,w:64,h:72,vy:0,onGround:true};
+ obstacles=[]; score=0; speed=6; gameOver=false; started=false; spawn=500;
+ clouds=[{x:100,y:70,s:1},{x:430,y:105,s:.75},{x:760,y:55,s:1.15}];
+ document.getElementById("score").textContent=0;
+}
+reset();
+
+function jump(){
+ if(gameOver){reset();return}
+ started=true;
+ if(rabbit.onGround){rabbit.vy=-15;rabbit.onGround=false}
+}
+addEventListener("keydown",e=>{
+ if(["Space","ArrowUp","KeyW"].includes(e.code)){e.preventDefault();jump()}
+ if(e.code==="KeyR"&&gameOver)reset();
+});
+c.addEventListener("pointerdown",jump);
+
+function rounded(x,y,w,h,r){
+ ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill();
+}
+
+function drawBackground(dt){
+ ctx.fillStyle="#fff8e8";ctx.fillRect(0,0,W,H);
+ // sun
+ ctx.fillStyle="#ffd978";ctx.beginPath();ctx.arc(820,82,38,0,Math.PI*2);ctx.fill();
+ // clouds
+ for(const cl of clouds){
+  cl.x-=dt*0.018*speed;
+  if(cl.x<-130)cl.x=W+100;
+  ctx.fillStyle="#fff";
+  ctx.beginPath();ctx.arc(cl.x,cl.y,24*cl.s,0,Math.PI*2);
+  ctx.arc(cl.x+25*cl.s,cl.y-8*cl.s,30*cl.s,0,Math.PI*2);
+  ctx.arc(cl.x+55*cl.s,cl.y,22*cl.s,0,Math.PI*2);ctx.fill();
+ }
+ // distant hills
+ ctx.fillStyle="#b9dfb0";ctx.beginPath();ctx.moveTo(0,300);
+ for(let x=0;x<=W;x+=80)ctx.quadraticCurveTo(x+40,245+(x%160)/3,x+80,300);
+ ctx.lineTo(W,ground);ctx.lineTo(0,ground);ctx.fill();
+ // ground
+ ctx.fillStyle="#8acb76";ctx.fillRect(0,ground,W,H-ground);
+ ctx.fillStyle="#6aae5e";ctx.fillRect(0,ground,W,7);
+ // grass marks
+ ctx.strokeStyle="#4f9c52";ctx.lineWidth=3;
+ for(let x=0;x<W;x+=35){ctx.beginPath();ctx.moveTo(x,ground+8);ctx.lineTo(x+5,ground+18);ctx.moveTo(x+12,ground+9);ctx.lineTo(x+8,ground+19);ctx.stroke()}
+}
+
+function drawRabbit(){
+ const x=rabbit.x,y=rabbit.y;
+ // shadow
+ ctx.fillStyle="#0002";ctx.beginPath();ctx.ellipse(x+32,ground+2,31,7,0,0,Math.PI*2);ctx.fill();
+ // body
+ ctx.fillStyle="#fff";
+ rounded(x+8,y+24,49,43,18);
+ // head
+ ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(x+39,y+22,29,0,Math.PI*2);ctx.fill();
+ // ears
+ ctx.fillStyle="#fff";ctx.beginPath();
+ ctx.ellipse(x+20,y-13,11,37,-.15,0,Math.PI*2);
+ ctx.ellipse(x+48,y-12,11,39,.12,0,Math.PI*2);ctx.fill();
+ // inner ears
+ ctx.fillStyle="#f3b4bd";ctx.beginPath();
+ ctx.ellipse(x+20,y-13,5,27,-.15,0,Math.PI*2);
+ ctx.ellipse(x+48,y-12,5,29,.12,0,Math.PI*2);ctx.fill();
+ // face
+ ctx.fillStyle="#493c39";ctx.beginPath();ctx.arc(x+31,y+18,3.2,0,Math.PI*2);ctx.arc(x+51,y+18,3.2,0,Math.PI*2);ctx.fill();
+ ctx.strokeStyle="#493c39";ctx.lineWidth=2;ctx.beginPath();ctx.arc(x+41,y+27,6,0,Math.PI);ctx.stroke();
+ // nose
+ ctx.fillStyle="#ef8e9c";ctx.beginPath();ctx.arc(x+41,y+25,3,0,Math.PI*2);ctx.fill();
+ // feet
+ ctx.fillStyle="#fff";ctx.beginPath();ctx.ellipse(x+18,y+66,13,7,0,0,Math.PI*2);ctx.ellipse(x+51,y+66,13,7,0,0,Math.PI*2);ctx.fill();
+}
+
+function spawnObstacle(){
+ const types=[
+  {w:34,h:40,color:"#8b776b",emoji:"🪨"},
+  {w:28,h:52,color:"#6f9d55",emoji:"🌿"},
+  {w:46,h:30,color:"#9b6a45",emoji:"🪵"}
+ ];
+ const t=types[Math.floor(Math.random()*types.length)];
+ obstacles.push({x:W+30,y:ground-t.h,w:t.w,h:t.h,emoji:t.emoji});
+}
+
+function drawObstacle(o){
+ ctx.font=`${Math.max(28,o.h)}px serif`;ctx.textAlign="center";ctx.textBaseline="middle";
+ ctx.fillText(o.emoji,o.x+o.w/2,o.y+o.h/2+2);
+ ctx.textAlign="start";ctx.textBaseline="alphabetic";
+}
+
+function hit(a,b){
+ const ax=a.x+12, ay=a.y+8, aw=a.w-22, ah=a.h-10;
+ return ax<b.x+b.w && ax+aw>b.x && ay<b.y+b.h && ay+ah>b.y;
+}
+
+function endGame(){
+ gameOver=true;
+ best=Math.max(best,Math.floor(score));
+ localStorage.setItem("bunnyBest",best);
+ document.getElementById("best").textContent=best;
+}
+
+function drawOverlay(){
+ if(!started&&!gameOver){
+  ctx.fillStyle="#0008";rounded(260,145,440,120,20);
+  ctx.fillStyle="#fff";ctx.textAlign="center";
+  ctx.font="bold 30px sans-serif";ctx.fillText("🐰 準備出發！",480,190);
+  ctx.font="18px sans-serif";ctx.fillText("按 Space、↑ 或點擊畫面開始跳躍",480,230);
+  ctx.font="14px sans-serif";ctx.fillText("跑得越遠，速度越快！",480,255);
+  ctx.textAlign="start";
+ }
+ if(gameOver){
+  ctx.fillStyle="#0009";rounded(280,125,400,165,22);
+  ctx.fillStyle="#fff";ctx.textAlign="center";
+  ctx.font="bold 34px sans-serif";ctx.fillText("遊戲結束！",480,175);
+  ctx.font="20px sans-serif";ctx.fillText(`本次分數：${Math.floor(score)}`,480,212);
+  ctx.font="16px sans-serif";ctx.fillText("按 R 或點擊畫面重新開始",480,247);
+  ctx.textAlign="start";
+ }
+}
+
+function loop(t){
+ const dt=Math.min((t-last)/16.67,2);last=t;
+ drawBackground(dt);
+ if(started&&!gameOver){
+  score+=dt*.6;speed+=dt*.0015;
+  spawn-=dt*16.67;
+  if(spawn<=0){spawnObstacle();spawn=Math.max(620,1100-speed*35)+Math.random()*500}
+  rabbit.vy+=.85*dt;rabbit.y+=rabbit.vy*dt;
+  if(rabbit.y>=ground-rabbit.h){rabbit.y=ground-rabbit.h;rabbit.vy=0;rabbit.onGround=true}
+  for(const o of obstacles)o.x-=speed*dt;
+  obstacles=obstacles.filter(o=>o.x+o.w>-30);
+  for(const o of obstacles)if(hit(rabbit,o))endGame();
+  document.getElementById("score").textContent=Math.floor(score);
+ }
+ obstacles.forEach(drawObstacle);drawRabbit();drawOverlay();
+ requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
